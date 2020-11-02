@@ -33,4 +33,5 @@ steps:
     GH_TOKEN:
       from_secret: GH_TOKEN
   commands:
+  - apk update && apk add --no-cache --no-progress git
   - npm run semantic-release
