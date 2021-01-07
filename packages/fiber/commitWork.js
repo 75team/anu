@@ -212,25 +212,27 @@ export function disposeFibers(fiber) {
     delete fiber.oldChildren;
     fiber.children = {};
 }
-function safeInvokeHooks(upateQueue, create, destory) {
-    var uneffects = upateQueue[destory],
-        effects = upateQueue[create], fn;
-    if (!uneffects){
-        return;
-    }
-    while ((fn = uneffects.shift())) {
-        try {
-            fn();
-        } catch (e) { /** */ }
-    }
-    while ((fn = effects.shift())) {
-        try {
-            var f = fn();
-            if (typeof f === 'function') {
-                uneffects.push(f);
+function safeInvokeHooks(upateQueue, create, destory, isUnmount) {
+    const prevDestroyList = upateQueue[destory];
+    const curCreateList = upateQueue[create];
+   
+    curCreateList && curCreateList.forEach((createFn, i) => {
+        const depsChange = typeof createFn === 'function';
+
+        if (depsChange || isUnmount) {
+            const prevDestroyFn = prevDestroyList[i];
+            if (typeof prevDestroyFn === 'function') {
+                prevDestroyFn();
             }
-        } catch (e) { /** */ }
-    }
+        }
+    });
+
+    !isUnmount && curCreateList && curCreateList.forEach((createFn, i) => {
+        if (typeof createFn === 'function') {
+            const destroyFn = createFn();
+            prevDestroyList[i] = destroyFn;
+        }
+    })
 }
 function disposeFiber(fiber, force) {
     let { stateNode, effectTag } = fiber;
@@ -248,8 +250,8 @@ function disposeFiber(fiber, force) {
             Renderer.onDispose(fiber);
             if (fiber.hasMounted) {
                 if (isStateless) {
-                    safeInvokeHooks(fiber.updateQueue, 'layout', 'unlayout');
-                    safeInvokeHooks(fiber.updateQueue, 'passive', 'unpassive');
+                    safeInvokeHooks(fiber.updateQueue, 'layout', 'unlayout', true);
+                    safeInvokeHooks(fiber.updateQueue, 'passive', 'unpassive', true);
                 }
                 stateNode.updater.enqueueSetState = returnFalse;
                 guardCallback(stateNode, 'componentWillUnmount', []);

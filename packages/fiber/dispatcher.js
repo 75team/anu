@@ -70,15 +70,16 @@ export function useCallbackImpl(create, deps, isMemo, isEffect) {//ok
 }
 export function useEffectImpl(create, deps, EffectTag, createList, destroyList) {//ok
     let fiber = getCurrentFiber();
+    const hookIndex = hookCursor;
     let updateQueue = fiber.updateQueue;
-    if (useCallbackImpl(create, deps, false, true)) {//防止重复添加  
-        if (fiber.effectTag % EffectTag) {
-            fiber.effectTag *= EffectTag;
-        }
-        let list = updateQueue[createList] || (updateQueue[createList] = []);
-        updateQueue[destroyList] || (updateQueue[destroyList] = []);
-        list.push(create);
+    const depsChange = !!useCallbackImpl(create, deps, false, true);
+
+    if (depsChange && fiber.effectTag % EffectTag) {
+        fiber.effectTag *= EffectTag;
     }
+    updateQueue[createList] || (updateQueue[createList] = []);
+    updateQueue[destroyList] || (updateQueue[destroyList] = []);
+    updateQueue[createList][hookIndex] = depsChange && create;
 }
 export function useRef(initValue) {//ok
     let fiber = getCurrentFiber();
