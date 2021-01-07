@@ -1,5 +1,5 @@
 /**
- * by 司徒正美 Copyright 2020-11-03
+ * by 司徒正美 Copyright 2021-01-07
  * IE9+
  */
 
@@ -754,15 +754,15 @@
     }
     function useEffectImpl(create, deps, EffectTag, createList, destroyList) {
       var fiber = getCurrentFiber();
+      var hookIndex = hookCursor;
       var updateQueue = fiber.updateQueue;
-      if (useCallbackImpl(create, deps, false, true)) {
-        if (fiber.effectTag % EffectTag) {
-          fiber.effectTag *= EffectTag;
-        }
-        var list = updateQueue[createList] || (updateQueue[createList] = []);
-        updateQueue[destroyList] || (updateQueue[destroyList] = []);
-        list.push(create);
+      var depsChange = !!useCallbackImpl(create, deps, false, true);
+      if (depsChange && fiber.effectTag % EffectTag) {
+        fiber.effectTag *= EffectTag;
       }
+      updateQueue[createList] || (updateQueue[createList] = []);
+      updateQueue[destroyList] || (updateQueue[destroyList] = []);
+      updateQueue[createList][hookIndex] = depsChange && create;
     }
     function useRef(initValue) {
       var fiber = getCurrentFiber();
@@ -2827,28 +2827,24 @@
       delete fiber.oldChildren;
       fiber.children = {};
     }
-    function safeInvokeHooks(upateQueue, create, destory) {
-      var uneffects = upateQueue[destory],
-          effects$$1 = upateQueue[create],
-          fn;
-      if (!uneffects) {
-        return;
-      }
-      while (fn = uneffects.shift()) {
-        try {
-          fn();
-        } catch (e) {
-        }
-      }
-      while (fn = effects$$1.shift()) {
-        try {
-          var f = fn();
-          if (typeof f === 'function') {
-            uneffects.push(f);
+    function safeInvokeHooks(upateQueue, create, destory, isUnmount) {
+      var prevDestroyList = upateQueue[destory];
+      var curCreateList = upateQueue[create];
+      curCreateList && curCreateList.forEach(function (createFn, i) {
+        var depsChange = typeof createFn === 'function';
+        if (depsChange || isUnmount) {
+          var prevDestroyFn = prevDestroyList[i];
+          if (typeof prevDestroyFn === 'function') {
+            prevDestroyFn();
           }
-        } catch (e) {
         }
-      }
+      });
+      !isUnmount && curCreateList && curCreateList.forEach(function (createFn, i) {
+        if (typeof createFn === 'function') {
+          var destroyFn = createFn();
+          prevDestroyList[i] = destroyFn;
+        }
+      });
     }
     function disposeFiber(fiber, force) {
       var stateNode = fiber.stateNode,
@@ -2867,8 +2863,8 @@
           Renderer.onDispose(fiber);
           if (fiber.hasMounted) {
             if (isStateless) {
-              safeInvokeHooks(fiber.updateQueue, 'layout', 'unlayout');
-              safeInvokeHooks(fiber.updateQueue, 'passive', 'unpassive');
+              safeInvokeHooks(fiber.updateQueue, 'layout', 'unlayout', true);
+              safeInvokeHooks(fiber.updateQueue, 'passive', 'unpassive', true);
             }
             stateNode.updater.enqueueSetState = returnFalse;
             guardCallback(stateNode, 'componentWillUnmount', []);
@@ -3338,7 +3334,7 @@
         findDOMNode: findDOMNode,
         unmountComponentAtNode: unmountComponentAtNode,
         unstable_renderSubtreeIntoContainer: unstable_renderSubtreeIntoContainer,
-        version: '1.7.3',
+        version: '1.7.4',
         render: render$1,
         hydrate: render$1,
         unstable_batchedUpdates: DOMRenderer.batchedUpdates,
